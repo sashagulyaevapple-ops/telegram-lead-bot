@@ -1,0 +1,124 @@
+import asyncio
+from aiogram import Bot, Dispatcher, types, F
+
+# ==================================================
+# 🔧 НАСТРОЙКИ (ОБЯЗАТЕЛЬНО ЗАПОЛНИТЬ)
+# ==================================================
+
+TOKEN = "PASTE_YOUR_BOT_TOKEN"
+
+HOT_CHANNEL_ID = -1001111111111   # 🔥 ID канала горячих лидов
+COLD_CHANNEL_ID = -1002222222222  # ❄️ ID канала холодных лидов
+
+
+KEYWORDS = [
+    "доставка",
+    "карго",
+    "китай",
+    "1688",
+    "таобао",
+    "выкуп",
+    "привез"
+]
+
+HOT_WORDS = [
+    "срочно",
+    "кто привез",
+    "нужна доставка",
+    "ищу карго",
+    "сколько стоит",
+    "цена",
+    "заказать",
+    "сегодня",
+    "50 кг",
+    "100 кг"
+]
+
+COLD_WORDS = [
+    "как",
+    "подскажите",
+    "кто работал",
+    "думаю",
+    "интересуюсь",
+    "хочу узнать",
+    "посоветуйте"
+]
+
+# ==================================================
+
+bot = Bot(TOKEN)
+dp = Dispatcher()
+
+sent_cache = set()
+
+
+def build_link(message: types.Message):
+    if str(message.chat.id).startswith("-100"):
+        chat_id = str(message.chat.id)[4:]
+        return f"https://t.me/c/{chat_id}/{message.message_id}"
+    return ""
+
+
+def classify(text: str):
+    text = text.lower()
+
+    if any(word in text for word in HOT_WORDS):
+        return "hot"
+
+    if any(word in text for word in COLD_WORDS):
+        return "cold"
+
+    if any(word in text for word in KEYWORDS):
+        return "cold"
+
+    return None
+
+
+@dp.message(F.text)
+async def monitor(message: types.Message):
+
+    if message.chat.type not in ["group", "supergroup"]:
+        return
+
+    text = message.text.lower()
+    result = classify(text)
+
+    if not result:
+        return
+
+    uid = f"{message.chat.id}_{message.message_id}"
+
+    if uid in sent_cache:
+        return
+
+    sent_cache.add(uid)
+
+    username = (
+        f"@{message.from_user.username}"
+        if message.from_user.username
+        else message.from_user.full_name
+    )
+
+    link = build_link(message)
+
+    msg = (
+        f"👤 {username}\n"
+        f"💬 {message.chat.title}\n\n"
+        f"{message.text}\n\n"
+        f"🔗 {link}"
+    )
+
+    if result == "hot":
+        await bot.send_message(HOT_CHANNEL_ID, "🔥 ГОРЯЧИЙ ЛИД\n\n" + msg)
+
+    elif result == "cold":
+        await bot.send_message(COLD_CHANNEL_ID, "❄️ ХОЛОДНЫЙ ЛИД\n\n" + msg)
+
+
+async def main():
+    print("✅ Бот запущен и мониторит группы...")
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
